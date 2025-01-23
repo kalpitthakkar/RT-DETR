@@ -5,13 +5,15 @@ import torch
 import torch.nn as nn 
 import torchvision.transforms as T
 
-import numpy as np 
+import os
+import numpy as np
 from PIL import Image, ImageDraw
 
 from src.core import YAMLConfig
 
 
 def draw(images, labels, boxes, scores, thrh = 0.6):
+    os.makedirs('detections', exist_ok=True)
     for i, im in enumerate(images):
         draw = ImageDraw.Draw(im)
 
@@ -24,7 +26,7 @@ def draw(images, labels, boxes, scores, thrh = 0.6):
             draw.rectangle(list(b), outline='red',)
             draw.text((b[0], b[1]), text=f"{lab[j].item()} {round(scrs[j].item(),2)}", fill='blue', )
 
-        im.save(f'results_{i}.jpg')
+        im.save(f'detections/results_{i}.jpg')
 
 
 def main(args, ):
@@ -71,6 +73,61 @@ def main(args, ):
     labels, boxes, scores = output
 
     draw([im_pil], labels, boxes, scores)
+    return output
+
+
+def load_model(config, resume, device):
+    """main
+    """
+    cfg = YAMLConfig(config, resume=resume)
+
+    if resume:
+        checkpoint = torch.load(resume, map_location='cpu') 
+        if 'ema' in checkpoint:
+            state = checkpoint['ema']['module']
+        else:
+            state = checkpoint['model']
+    else:
+        raise AttributeError('Only support resume to load model.state_dict by now.')
+
+    # NOTE load train mode state -> convert to deploy mode
+    cfg.model.load_state_dict(state)
+
+    class Model(nn.Module):
+        def __init__(self, ) -> None:
+            super().__init__()
+            self.model = cfg.model.deploy()
+            self.postprocessor = cfg.postprocessor.deploy()
+            
+        def forward(self, images, orig_target_sizes):
+            outputs = self.model(images)
+            outputs = self.postprocessor(outputs, orig_target_sizes)
+            return outputs
+
+    model = Model().to(device)
+    return cfg, model
+
+def main_infer(im_file, device, model):
+    im_pil = Image.open(im_file).convert('RGB')
+    w, h = im_pil.size
+    orig_size = torch.tensor([w, h])[None].to(device)
+
+    transforms = T.Compose([
+        T.Resize((640, 640)),
+        T.ToTensor(),
+    ])
+    im_data = transforms(im_pil)[None].to(device)
+    # breakpoint()
+
+    output = model(im_data, orig_size)
+    labels, boxes, scores = output
+    labels = labels.detach().cpu().numpy()
+    boxes = boxes.detach().cpu().numpy()
+    scores = scores.detach().cpu().numpy()
+    output = labels, boxes, scores
+
+    # draw([im_pil], labels, boxes, scores)
+    return output
 
 
 if __name__ == '__main__':
