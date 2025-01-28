@@ -9,10 +9,10 @@ import os
 import numpy as np
 from PIL import Image, ImageDraw
 
-from src.core import YAMLConfig
+from object_detector_detr.rtdetrv2_pytorch.src.core import YAMLConfig
 
 
-def draw(images, labels, boxes, scores, thrh = 0.6):
+def draw(images, labels, boxes, scores, thrh = 0.6, idx = None):
     os.makedirs('detections', exist_ok=True)
     for i, im in enumerate(images):
         draw = ImageDraw.Draw(im)
@@ -26,7 +26,10 @@ def draw(images, labels, boxes, scores, thrh = 0.6):
             draw.rectangle(list(b), outline='red',)
             draw.text((b[0], b[1]), text=f"{lab[j].item()} {round(scrs[j].item(),2)}", fill='blue', )
 
-        im.save(f'detections/results_{i}.jpg')
+        if idx is not None:
+            im.save(f'detections/results_{idx:04d}.jpg')
+        else:
+            im.save(f'detections/results_{i:04d}.jpg')
 
 
 def main(args, ):
