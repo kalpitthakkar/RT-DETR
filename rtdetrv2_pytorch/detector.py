@@ -32,7 +32,7 @@ def detect_obj_on_folder(folder_path, save_dir=None):
         os.path.dirname(os.path.abspath(__file__)),
         "checkpoints/rtdetrv2_r50vd_m_7x_coco_ema.pth"
     )
-    device = "mps"
+    device = "cpu"
     detections = []
     save_detections = {}
     _, model = load_model(config_path, ckpt_path, device)
